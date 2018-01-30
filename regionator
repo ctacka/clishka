@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import argparse
+import subprocess
+
+argparser = argparse.ArgumentParser()
+argparser.add_argument('-c', dest='config', help='StackMaster config file to get regions', default='')
+argparser.add_argument('-r', dest='regions', help='Comma-separated list of regions', default='')
+argparser.add_argument('--ignore', help='Ignore errors, exit swith 0 if at least one region was ok', action='store_true')
+
+argparser.add_argument(dest='command', nargs=argparse.REMAINDER)
+args = argparser.parse_args()
+
+regs = args.regions.split(',')
+if not args.config == '':
+    try:
+        conf = os.path.abspath(args.config)
+        import yaml
+        with open(conf, 'rb') as f:
+            sm_conf = yaml.load(f)
+            regs.extend(sm_conf['stacks'].keys())
+    except KeyError:
+        raise Exception('Invalid config {}'.format(args.config))
+regions = set(regs)
+
+environment = os.environ.copy()
+for region in regions:
+    environment['AWS_REGION'] = region
+    output = subprocess.PIPE
+    sys.stdout.write("*** [{}]: {}".format(region, ' '.join(args.command)))
+    process = subprocess.Popen(args.command, env=environment, shell=True)
+    process.communicate()
+    if not args.ignore and not process.returncode == 0:
+        sys.exit(process.returncode)
+    sys.stdout.write('\n')
+
+sys.exit(0)
